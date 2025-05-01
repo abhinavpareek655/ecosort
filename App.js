@@ -12,12 +12,14 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { analyzeWaste } from './aiService';
 import Feather from '@expo/vector-icons/Feather';
 import Entypo from '@expo/vector-icons/Entypo';
 import { CameraView, CameraType,  useCameraPermissions } from 'expo-camera';
 import { useFocusEffect } from '@react-navigation/native';
+import OpenAI from 'openai';
 
 
 // Create navigators
@@ -30,7 +32,7 @@ const HomeScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <View style={styles.header}>
-          <Text style={styles.appName}>EcoScan</Text>
+          <Text style={styles.appName}>RecycleBuddy</Text>
           <Text style={styles.tagline}>AI-Powered Recycling Assistant</Text>
         </View>
         
@@ -200,13 +202,23 @@ const ScanScreen = () => {
       Alert.alert('Camera not ready');
     }
   };
+  
 
   const analyzeImage = async (photo) => {
     try {
-      const response = await fetch('https://your-backend-api.com/analyze-waste', {
+      const formData = new FormData();
+      formData.append('img', {
+        uri: photo.uri,
+        name: 'photo.jpg',
+        type: 'image/jpeg',
+      });
+
+      const response = await fetch('http://192.168.10.218:5000/result', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: photo.base64 })
+        headers: {
+          'Accept': 'application/json'
+        },
+        body: formData
       });
 
       if (!response.ok) throw new Error('Server error');
