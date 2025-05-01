@@ -13,10 +13,10 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-
+import { analyzeWaste } from './aiService';
 import Feather from '@expo/vector-icons/Feather';
 import Entypo from '@expo/vector-icons/Entypo';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType,  useCameraPermissions } from 'expo-camera';
 import { useFocusEffect } from '@react-navigation/native';
 
 
@@ -161,110 +161,141 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-// Scan Screen
 const ScanScreen = () => {
   const [permission, requestPermission] = useCameraPermissions();
+  const [cameraReady, setCameraReady] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
+  const [cameraActive, setCameraActive] = useState(true);
   const [result, setResult] = useState(null);
-  const [photoUri, setPhotoUri] = useState(null);
-  const [captureNextFrame, setCaptureNextFrame] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
+  const cameraRef = useRef(null);
 
   useEffect(() => {
-    if (!permission) {
-      requestPermission();
-    }
-  }, [permission]);
+    if (!permission) requestPermission();
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
       setCameraActive(true);
-  
-      return () => {
-        setCameraActive(false);  // When screen goes away, deactivate camera
-      };
+      return () => setCameraActive(false);
     }, [])
   );
 
-  const handleSnapshot = async (frame) => {
-    if (captureNextFrame) {
-      const fileUri = FileSystem.cacheDirectory + `photo_${Date.now()}.jpg`;
-
-      await FileSystem.writeAsStringAsync(fileUri, frame, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      setPhotoUri(fileUri);
-      setCaptureNextFrame(false);
-
-      setScanning(true);
-
-      setTimeout(() => {
-        setScanning(false);
-        setResult({
-          item: 'Plastic Bottle',
-          type: 'PET',
-          recyclable: true,
-          instructions: 'Rinse and recycle',
-          impact: 'Saves 3.8 barrels of oil.'
+  const takePicture = async () => {
+    if (cameraRef.current && cameraReady) {
+      try {
+        setScanning(true);
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+          base64: true
         });
-      }, 2000);
+        setCapturedImage(photo);
+        await analyzeImage(photo);
+      } catch (error) {
+        console.error(error);
+        Alert.alert('Error', 'Failed to take picture.');
+        setScanning(false);
+      }
+    } else {
+      Alert.alert('Camera not ready');
     }
   };
 
-  const capturePhoto = () => {
-    setCaptureNextFrame(true);
+  const analyzeImage = async (photo) => {
+    try {
+      const response = await fetch('https://your-backend-api.com/analyze-waste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: photo.base64 })
+      });
+
+      if (!response.ok) throw new Error('Server error');
+
+      const data = await response.json();
+
+      setResult({
+        item: data.itemName || 'Unknown',
+        type: data.materialType || 'Unknown',
+        recyclable: data.isRecyclable,
+        instructions: data.disposalInstructions || 'No instructions',
+        impact: data.environmentalImpact || 'No impact info'
+      });
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Failed', 'Error analyzing image');
+    } finally {
+      setScanning(false);
+    }
   };
 
   const resetScan = () => {
+    setCapturedImage(null);
     setResult(null);
   };
 
-
-  if (!permission) {
-    return <View><Text>Requesting camera permission...</Text></View>;
+  if (!permission?.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Camera permission not granted</Text>
+        <TouchableOpacity 
+          style={styles.permissionButton}
+          onPress={requestPermission}
+        >
+          <Text style={styles.permissionButtonText}>Request Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
-  if (!permission.granted) {
-    return <View><Text>No access to camera. Please allow it in settings.</Text></View>;
-  }
-  
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.scanContainer}>
         {!result ? (
           <>
-            {cameraActive && (
-              <CameraView
-                style={{ flex: 1 }}
-                facing="back"
-                enableSnapshot
-                onSnapshotReady={({ base64 }) => handleSnapshot(base64)}
-              >
-                {scanning && (
-                  <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontSize: 24 }}>Analyzing...</Text>
-                  </View>
-                )}
-              </CameraView>
-            )}
+            <View style={styles.cameraContainer}>
+              {cameraActive ? (
+                <CameraView
+                  ref={cameraRef}
+                  style={styles.camera}
+                  facing="back"
+                  onCameraReady={() => setCameraReady(true)}
+                />
+              ) : (
+                <View style={styles.cameraPlaceholder}>
+                  <Feather name="camera" size={48} color="#fff" />
+                  <Text style={styles.cameraText}>Loading camera...</Text>
+                </View>
+              )}
+              {scanning && (
+                <View style={styles.overlay}>
+                  <Feather name="loader" size={24} color="white" />
+                  <Text style={styles.overlayText}>Analyzing...</Text>
+                </View>
+              )}
+              {capturedImage && !scanning && (
+                <Image 
+                  source={{ uri: capturedImage.uri }}
+                  style={styles.capturedImage}
+                />
+              )}
+            </View>
 
             <View style={styles.scanInstructions}>
               <Text style={styles.scanTitle}>Smart Waste Identification</Text>
               <Text style={styles.scanDescription}>
                 Our AI will analyze your waste item and provide recycling guidance.
               </Text>
-              
-              <TouchableOpacity 
-                style={styles.scanButton} 
-                onPress={capturePhoto}
-                disabled={scanning}
+
+              <TouchableOpacity
+                style={styles.scanButton}
+                onPress={takePicture}
+                disabled={scanning || !cameraReady}
               >
                 <Text style={styles.scanButtonText}>
-                  {scanning ? 'Scanning...' : 'Start Scan'}
+                  {scanning ? 'Analyzing...' : 'Capture & Analyze'}
                 </Text>
               </TouchableOpacity>
-              
+
               <Text style={styles.scanTip}>
                 Tip: Make sure the item is well-lit and centered in the frame.
               </Text>
@@ -278,29 +309,38 @@ const ScanScreen = () => {
                 <Text style={styles.resetButton}>New Scan</Text>
               </TouchableOpacity>
             </View>
-            
+
+            {capturedImage && (
+              <View style={styles.resultImageContainer}>
+                <Image
+                  source={{ uri: capturedImage.uri }}
+                  style={styles.resultImage}
+                />
+              </View>
+            )}
+
             <View style={styles.itemCard}>
               <Text style={styles.itemName}>{result.item}</Text>
               <Text style={styles.itemType}>{result.type}</Text>
-              
+
               <View style={[
-                styles.recyclableTag, 
-                {backgroundColor: result.recyclable ? '#e6ffe6' : '#ffe6e6'}
+                styles.recyclableTag,
+                { backgroundColor: result.recyclable ? '#e6ffe6' : '#ffe6e6' }
               ]}>
                 <Text style={[
-                  styles.recyclableText, 
-                  {color: result.recyclable ? '#00cc66' : '#ff3333'}
+                  styles.recyclableText,
+                  { color: result.recyclable ? '#00cc66' : '#ff3333' }
                 ]}>
                   {result.recyclable ? 'Recyclable' : 'Not Recyclable'}
                 </Text>
               </View>
             </View>
-            
+
             <View style={styles.instructionsCard}>
               <Text style={styles.instructionsTitle}>Disposal Instructions</Text>
               <Text style={styles.instructionsText}>{result.instructions}</Text>
             </View>
-            
+
             <View style={styles.impactInfo}>
               <Text style={styles.impactInfoTitle}>Environmental Impact</Text>
               <Text style={styles.impactInfoText}>{result.impact}</Text>
@@ -308,7 +348,7 @@ const ScanScreen = () => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -604,14 +644,13 @@ const MapScreen = () => {
         
         <View style={styles.locationsList}>
           <Text style={styles.locationsTitle}>Nearby Recycling Points</Text>
-          
+          <ScrollView showsVerticalScrollIndicator={false}>          
           {recyclingPoints.map(point => (
             <TouchableOpacity key={point.id} style={styles.locationCard}>
               <View style={styles.locationInfo}>
                 <Text style={styles.locationName}>{point.name}</Text>
                 <Text style={styles.locationDistance}>{point.distance}</Text>
               </View>
-              
               <View style={styles.locationTypes}>
                 {point.types.map((type, index) => (
                   <View key={index} style={styles.typeTag}>
@@ -619,7 +658,6 @@ const MapScreen = () => {
                   </View>
                 ))}
               </View>
-              
               <View style={styles.locationActions}>
                 <TouchableOpacity style={styles.directionButton}>
                   <Text style={styles.directionButtonText}>Directions</Text>
@@ -630,7 +668,8 @@ const MapScreen = () => {
               </View>
             </TouchableOpacity>
           ))}
-        </View>
+          </ScrollView>
+          </View>
       </View>
     </SafeAreaView>
   );
@@ -694,7 +733,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   
   // Home Screen Styles
@@ -849,11 +887,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
     borderRadius: 15,
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 20,
   },
+  camera: {
+    flex: 1,
+  },
   cameraPlaceholder: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -862,16 +902,20 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
   },
-  scanningOverlay: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scanningText: {
+  overlayText: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
+    marginTop: 10,
+  },
+  capturedImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   scanInstructions: {
     backgroundColor: '#fff',
@@ -1038,7 +1082,6 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   categoryContent: {
-    flex:1,
     backgroundColor: '#fff',
     borderRadius: 15,
     overflow: 'hidden',
