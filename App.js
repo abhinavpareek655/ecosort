@@ -314,13 +314,132 @@ const ScanScreen = () => {
 
 // Guide Screen
 const GuideScreen = () => {
-
+  const categories = [
+    {
+      id: 1,
+      name: 'Plastics',
+      icon: 'bottle',
+      color: '#2196F3',
+      types: [
+        { type: 'PET (1)', recyclable: true, examples: 'Water bottles, soda bottles' },
+        { type: 'HDPE (2)', recyclable: true, examples: 'Milk jugs, detergent bottles' },
+        { type: 'PVC (3)', recyclable: false, examples: 'Pipes, window frames' },
+        { type: 'LDPE (4)', recyclable: 'Sometimes', examples: 'Plastic bags, squeeze bottles' },
+        { type: 'PP (5)', recyclable: true, examples: 'Yogurt containers, bottle caps' },
+        { type: 'PS (6)', recyclable: 'Sometimes', examples: 'Styrofoam, disposable cups' },
+        { type: 'Other (7)', recyclable: false, examples: 'Mixed plastics' },
+      ]
+    },
+    {
+      id: 2,
+      name: 'Paper',
+      icon: 'paper',
+      color: '#4CAF50',
+      types: [
+        { type: 'Newspaper', recyclable: true, examples: 'Newspapers, flyers' },
+        { type: 'Cardboard', recyclable: true, examples: 'Boxes, packaging' },
+        { type: 'Mixed Paper', recyclable: true, examples: 'Office paper, magazines' },
+        { type: 'Shredded Paper', recyclable: 'Sometimes', examples: 'Shredded documents' },
+        { type: 'Waxed Paper', recyclable: false, examples: 'Waxed food containers' },
+      ]
+    },
+    {
+      id: 3,
+      name: 'Glass',
+      icon: 'glass',
+      color: '#9C27B0',
+      types: [
+        { type: 'Clear Glass', recyclable: true, examples: 'Jars, bottles' },
+        { type: 'Colored Glass', recyclable: true, examples: 'Wine bottles, beer bottles' },
+        { type: 'Window Glass', recyclable: false, examples: 'Windows, mirrors' },
+        { type: 'Drinking Glasses', recyclable: false, examples: 'Cups, tumblers' },
+        { type: 'Light Bulbs', recyclable: 'Special', examples: 'Incandescent, LED, CFL' },
+      ]
+    },
+    {
+      id: 4,
+      name: 'Metal',
+      icon: 'metal',
+      color: '#FF9800',
+      types: [
+        { type: 'Aluminum', recyclable: true, examples: 'Cans, foil' },
+        { type: 'Steel', recyclable: true, examples: 'Food cans, aerosol cans' },
+        { type: 'Scrap Metal', recyclable: true, examples: 'Pipes, tools' },
+        { type: 'Electronics', recyclable: 'Special', examples: 'Computers, phones' },
+        { type: 'Batteries', recyclable: 'Special', examples: 'AA, AAA, lithium' },
+      ]
+    },
+  ];
+  
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]);
+  
   return (
-    <SafeAreaView>
-      <View>
-        <Text style={{padding: "50", color:"black", alignItems: "center",}}>Recycling Guide</Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.guideContainer}>
+        <Text style={styles.guideTitle}>Recycling Guide</Text>
+        <Text style={styles.guideSubtitle}>Learn how to properly dispose of different materials</Text>
+        
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category.id}
+              style={[
+                styles.categoryTab,
+                selectedCategory.id === category.id && styles.categoryTabActive,
+                {borderColor: category.color}
+              ]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text 
+                style={[
+                  styles.categoryTabText,
+                  selectedCategory.id === category.id && {color: category.color}
+                ]}
+              >
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <ScrollView contentContainerStyle={styles.categoryContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.categoryContent}>
+          <View style={[styles.categoryHeader, {backgroundColor: selectedCategory.color}]}>
+            <Text style={styles.categoryHeaderText}>{selectedCategory.name} Recycling Guide</Text>
+          </View>
+          {selectedCategory.types.map((item, index) => (
+            <View key={index} style={styles.materialItem}>
+              <View style={styles.materialHeader}>
+                <Text style={styles.materialType}>{item.type}</Text>
+                <View style={[
+                  styles.recyclableIndicator,
+                  {
+                    backgroundColor: 
+                      item.recyclable === true ? '#e6ffe6' : 
+                      item.recyclable === false ? '#ffe6e6' : '#fff2e6'
+                  }
+                ]}>
+                  <Text style={[
+                    styles.recyclableIndicatorText,
+                    {
+                      color: 
+                        item.recyclable === true ? '#00cc66' : 
+                        item.recyclable === false ? '#ff3333' : '#ff9933'
+                    }
+                  ]}>
+                    {typeof item.recyclable === 'boolean' 
+                      ? (item.recyclable ? 'Recyclable' : 'Not Recyclable') 
+                      : item.recyclable}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.materialExamples}>Examples: {item.examples}</Text>
+            </View>
+          ))}
+        </View>
+        </ScrollView>
       </View>
-    </SafeAreaView>    
+    </SafeAreaView>
   );
 };
 
@@ -377,11 +496,11 @@ const LearnScreen = () => {
             <Text style={styles.statLabel}>Tons of plastic enter our oceans each year</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>75%</Text>
-            <Text style={styles.statLabel}>Of America's waste is recyclable</Text>
+            <Text style={styles.statNumber}>69%</Text>
+            <Text style={styles.statLabel}>Of India's waste is recyclable</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>30%</Text>
+            <Text style={styles.statNumber}>8%</Text>
             <Text style={styles.statLabel}>Is actually recycled</Text>
           </View>
         </View>
@@ -463,25 +582,20 @@ const MapScreen = () => {
           <Text style={styles.mapTitle}>Recycling Locations</Text>
           <View style={styles.locationSelector}>
             <Feather name="map-pin" size={16} color="#4CAF50" />
-            {/* <MapPin stroke="#4CAF50" width={16} height={16} /> */}
             <Text style={styles.locationText}>{location}</Text>
           </View>
         </View>
         
         <View style={styles.mapView}>
-          {/* Map placeholder - would be replaced with actual map component */}
           <Text style={styles.mapPlaceholder}>Map View</Text>
           <View style={styles.mapPin1}>
           <Feather name="map-pin" size={24} color="#4CAF50" />
-            {/* <MapPin stroke="#4CAF50" width={24} height={24} fill="#4CAF50" /> */}
           </View>
           <View style={styles.mapPin2}>
           <Feather name="map-pin" size={24} color="#4CAF50" />
-          {/* <MapPin stroke="#4CAF50" width={24} height={24} fill="#4CAF50" /> */}
           </View>
           <View style={styles.mapPin3}>
           <Feather name="map-pin" size={24} color="#4CAF50" />
-          {/* <MapPin stroke="#4CAF50" width={24} height={24} fill="#4CAF50" /> */}
           </View>
           <View style={styles.mapUserLocation}>
             <View style={styles.userLocationDot} />
@@ -908,10 +1022,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     marginRight: 10,
+    marginBottom: 10,
     borderRadius: 20,
     borderWidth: 2,
     borderColor: '#ddd',
     backgroundColor: '#fff',
+    height: 44,
   },
   categoryTabActive: {
     backgroundColor: '#fff',
@@ -922,6 +1038,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   categoryContent: {
+    flex:1,
     backgroundColor: '#fff',
     borderRadius: 15,
     overflow: 'hidden',
