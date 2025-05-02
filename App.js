@@ -14,7 +14,6 @@ import {
   StatusBar,
   Alert,
 } from 'react-native';
-import { analyzeWaste } from './aiService';
 import Feather from '@expo/vector-icons/Feather';
 import Entypo from '@expo/vector-icons/Entypo';
 import { CameraView, CameraType,  useCameraPermissions } from 'expo-camera';
@@ -206,12 +205,17 @@ const ScanScreen = () => {
 
   const analyzeImage = async (photo) => {
     try {
+      console.log("[analyzeImage] Starting analysis...");
+      console.log("[analyzeImage] Photo captured:", photo);
+
       const formData = new FormData();
       formData.append('img', {
         uri: photo.uri,
         name: 'photo.jpg',
         type: 'image/jpeg',
       });
+
+      console.log("[analyzeImage] FormData prepared:", formData);
 
       const response = await fetch('http://192.168.10.218:5000/result', {
         method: 'POST',
@@ -221,46 +225,65 @@ const ScanScreen = () => {
         body: formData
       });
 
+      console.log("[analyzeImage] Flask API Response status:", response.status);
+
       if (!response.ok) throw new Error('Server error');
 
       const data = await response.json();
+      console.log("[analyzeImage] Data received from Flask API:", data);
 
-      setResult({
-        item: data.itemName || 'Unknown',
-        type: data.materialType || 'Unknown',
-        recyclable: data.isRecyclable,
-        instructions: data.disposalInstructions || 'No instructions',
-        impact: data.environmentalImpact || 'No impact info'
-      });
+      const detectedItems = data.result;
+
+      console.log("[analyzeImage] Detected Items:", detectedItems);
+
+      if (!detectedItems || detectedItems.length === 0) {
+        console.log("[analyzeImage] No item detected. Setting default result.");
+        setResult({
+          item: "No Item Detected",
+          type: "-",
+          recyclable: false,
+          instructions: "Please try again with better lighting or clearer item.",
+          impact: "-"
+        });
+        return;
+      }
+
+      setResult(data.result);
+      console.log("[analyzeImage] Final result set in state:", data.result);
+
+      // if (!itemInfo) throw new Error('Failed to fetch from DeepSeek');
+
+      // const finalResult = {
+      //   item: itemName,
+      //   type: itemInfo.materialType || 'Unknown',
+      //   recyclable: itemInfo.isRecyclable,
+      //   instructions: itemInfo.disposalInstructions || 'No instructions',
+      //   impact: itemInfo.environmentalImpact || 'No impact info'
+      // };
+
+      console.log("[analyzeImage] Final result set in state:", finalResult);
+
+      setResult(finalResult);
+
     } catch (err) {
-      console.error(err);
+      console.error("[analyzeImage] Error:", err);
       Alert.alert('Failed', 'Error analyzing image');
     } finally {
+      console.log("[analyzeImage] Analysis complete, resetting scanning...");
       setScanning(false);
     }
-  };
+};
+
 
   const resetScan = () => {
-    setCapturedImage(null);
-    setResult(null);
+      setCapturedImage(null);
+      setResult(null);
   };
-
-  if (!permission?.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Camera permission not granted</Text>
-        <TouchableOpacity 
-          style={styles.permissionButton}
-          onPress={requestPermission}
-        >
-          <Text style={styles.permissionButtonText}>Request Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  
+  
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.scanContainer}>
         {!result ? (
           <>
@@ -314,7 +337,7 @@ const ScanScreen = () => {
             </View>
           </>
         ) : (
-          <View style={styles.resultContainer}>
+          <ScrollView style={styles.resultContainer} showsVerticalScrollIndicator={false}>
             <View style={styles.resultHeader}>
               <Text style={styles.resultTitle}>Scan Result</Text>
               <TouchableOpacity onPress={resetScan}>
@@ -326,41 +349,42 @@ const ScanScreen = () => {
               <View style={styles.resultImageContainer}>
                 <Image
                   source={{ uri: capturedImage.uri }}
-                  style={styles.resultImage}
+                  style={styles.resultImage}  
                 />
               </View>
             )}
+          {result.map((item, index) => (
+              <View key={index} style={styles.itemCard}>
+                <Text style={styles.itemName}>{item.item}</Text>
+                <Text style={styles.itemType}>{item.materialType}</Text>
 
-            <View style={styles.itemCard}>
-              <Text style={styles.itemName}>{result.item}</Text>
-              <Text style={styles.itemType}>{result.type}</Text>
-
-              <View style={[
-                styles.recyclableTag,
-                { backgroundColor: result.recyclable ? '#e6ffe6' : '#ffe6e6' }
-              ]}>
-                <Text style={[
-                  styles.recyclableText,
-                  { color: result.recyclable ? '#00cc66' : '#ff3333' }
+                <View style={[
+                  styles.recyclableTag,
+                  { backgroundColor: item.isRecyclable ? '#e6ffe6' : '#ffe6e6' }
                 ]}>
-                  {result.recyclable ? 'Recyclable' : 'Not Recyclable'}
-                </Text>
+                  <Text style={[
+                    styles.recyclableText,
+                    { color: item.isRecyclable ? '#00cc66' : '#ff3333' }
+                  ]}>
+                    {item.isRecyclable ? 'Recyclable' : 'Not Recyclable'}
+                  </Text>
+                </View>
+
+                <View style={styles.instructionsCard}>
+                  <Text style={styles.instructionsTitle}>Disposal Instructions</Text>
+                  <Text style={styles.instructionsText}>{item.disposalInstructions}</Text>
+                </View>
+
+                <View style={styles.impactInfo}>
+                  <Text style={styles.impactInfoTitle}>Environmental Impact</Text>
+                  <Text style={styles.impactInfoText}>{item.environmentImpact}</Text>
+                </View>
               </View>
-            </View>
-
-            <View style={styles.instructionsCard}>
-              <Text style={styles.instructionsTitle}>Disposal Instructions</Text>
-              <Text style={styles.instructionsText}>{result.instructions}</Text>
-            </View>
-
-            <View style={styles.impactInfo}>
-              <Text style={styles.impactInfoTitle}>Environmental Impact</Text>
-              <Text style={styles.impactInfoText}>{result.impact}</Text>
-            </View>
-          </View>
+            ))}
+          </ScrollView>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -745,6 +769,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   
   // Home Screen Styles
